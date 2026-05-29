@@ -78,6 +78,25 @@ module Dependabot
             cooldown.semver_patch_days.to_i.positive?
         end
 
+        # PEP 440-aware override to avoid treating stable post releases (e.g., >=1.0.0.post1) as prerelease intent.
+        sig { override.returns(T::Boolean) }
+        def wants_prerelease?
+          current_version = dependency.version
+          return true if current_version &&
+                         version_class.correct?(current_version) &&
+                         version_class.new(current_version).prerelease?
+
+          dependency.requirements.any? do |req|
+            req_string = req.fetch(:requirement) || ""
+            req_string.split(",").map(&:strip).any? do |r|
+              version_str = r.gsub(/^\s*[!<>=~^]+\s*/, "").strip
+              next false unless version_class.correct?(version_str)
+
+              version_class.new(version_str).prerelease?
+            end
+          end
+        end
+
         private
 
         sig { params(tags: T::Array[T::Hash[Symbol, T.untyped]]).returns(T.nilable(T::Hash[Symbol, T.untyped])) }
